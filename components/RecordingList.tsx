@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Search, Sparkles, PenTool, Copy, Check, List } from 'lucide-react';
+import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Sparkles, PenTool, Copy, Check, List } from 'lucide-react';
 import { AudioRecording } from '../types';
 import { getAudioBlob, deleteAudioBlob } from '../services/db';
 import { transcribeAudio, analyzeText, improveTextWithPolza } from '../services/polza';
