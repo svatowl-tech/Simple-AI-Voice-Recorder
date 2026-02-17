@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Search, Sparkles, PenTool } from 'lucide-react';
+import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Search, Sparkles, PenTool, Copy, Check, List } from 'lucide-react';
 import { AudioRecording } from '../types';
 import { getAudioBlob, deleteAudioBlob } from '../services/db';
 import { transcribeAudio, analyzeText, improveTextWithPolza } from '../services/polza';
@@ -24,6 +24,7 @@ const RecordingList: React.FC<RecordingListProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [currentBlobUrl, setCurrentBlobUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedSection, setCopiedSection] = useState<'analysis' | 'improved' | 'transcription' | null>(null);
   
   // Export Menu State
   const [exportMenuOpen, setExportMenuOpen] = useState<{ type: 'transcription' | 'analysis' | 'improved', id: string } | null>(null);
@@ -155,6 +156,16 @@ const RecordingList: React.FC<RecordingListProps> = ({
     }
   };
 
+  const handleCopy = async (text: string, section: 'analysis' | 'improved' | 'transcription') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedSection(section);
+      setTimeout(() => setCopiedSection(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   // --- EXPORT LOGIC ---
   const downloadFile = (content: string, filename: string, mimeType: string) => {
     const blob = new Blob([content], { type: mimeType });
@@ -250,14 +261,12 @@ const RecordingList: React.FC<RecordingListProps> = ({
   };
 
   // RENDER HELPERS
-  const renderDetailView = (rec: AudioRecording, isMobile: boolean) => (
-      <div className={`h-full flex flex-col bg-dark pb-24 md:pb-0 overflow-hidden relative ${isMobile ? '' : 'rounded-tl-2xl border-l border-slate-700'}`}>
+  const renderDetailView = (rec: AudioRecording) => (
+      <div className="h-full flex flex-col bg-dark pb-24 md:pb-0 overflow-hidden relative md:rounded-tl-2xl md:border-l md:border-slate-700">
         <div className="p-4 flex items-center gap-3 border-b border-slate-800 bg-surface/50 backdrop-blur-md sticky top-0 z-20">
-          {isMobile && (
-             <button onClick={() => setSelectedId(null)} className="p-2 hover:bg-slate-700 rounded-full">
-                <X className="w-5 h-5" />
-             </button>
-          )}
+          <button onClick={() => setSelectedId(null)} className="md:hidden p-2 hover:bg-slate-700 rounded-full">
+              <X className="w-5 h-5" />
+          </button>
           <h2 className="text-lg font-semibold truncate flex-1">{rec.title}</h2>
         </div>
 
@@ -309,15 +318,28 @@ const RecordingList: React.FC<RecordingListProps> = ({
                               <BrainCircuit className="w-5 h-5" />
                               AI Анализ
                           </h3>
-                          <button 
-                              onClick={(e) => {
+                          <div className="flex items-center gap-2">
+                            <button
+                                onClick={(e) => {
                                   e.stopPropagation();
-                                  setExportMenuOpen({ type: 'analysis', id: rec.id });
-                              }}
-                              className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-                          >
-                              <Download className="w-3 h-3" /> Экспорт отчета
-                          </button>
+                                  handleCopy(getAnalysisContent(rec), 'analysis');
+                                }}
+                                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                                title="Копировать в буфер обмена"
+                            >
+                                {copiedSection === 'analysis' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                {copiedSection === 'analysis' ? 'Скопировано' : 'Копировать'}
+                            </button>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExportMenuOpen({ type: 'analysis', id: rec.id });
+                                }}
+                                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                            >
+                                <Download className="w-3 h-3" /> Экспорт
+                            </button>
+                          </div>
                       </div>
 
                       {/* Export Menu Popover for Analysis */}
@@ -378,15 +400,28 @@ const RecordingList: React.FC<RecordingListProps> = ({
                             <Sparkles className="w-5 h-5" />
                             Улучшенный текст
                         </h3>
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setExportMenuOpen({ type: 'improved', id: rec.id });
-                            }}
-                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-                        >
-                            <FileDown className="w-3 h-3" /> Экспорт
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopy(rec.improvedText || '', 'improved');
+                                }}
+                                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                                title="Копировать в буфер обмена"
+                            >
+                                {copiedSection === 'improved' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                {copiedSection === 'improved' ? 'Скопировано' : 'Копировать'}
+                            </button>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExportMenuOpen({ type: 'improved', id: rec.id });
+                                }}
+                                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                            >
+                                <FileDown className="w-3 h-3" /> Экспорт
+                            </button>
+                        </div>
                     </div>
 
                     {/* Export Menu for Improved Text */}
@@ -441,15 +476,28 @@ const RecordingList: React.FC<RecordingListProps> = ({
                         )}
 
                       </div>
-                      <button 
-                          onClick={(e) => {
+                      <div className="flex items-center gap-2">
+                        <button
+                            onClick={(e) => {
                               e.stopPropagation();
-                              setExportMenuOpen({ type: 'transcription', id: rec.id });
-                          }}
-                          className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
-                      >
-                          <FileDown className="w-3 h-3" /> Экспорт
-                      </button>
+                              handleCopy(rec.transcription || '', 'transcription');
+                            }}
+                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                            title="Копировать в буфер обмена"
+                        >
+                            {copiedSection === 'transcription' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                            {copiedSection === 'transcription' ? 'Скопировано' : 'Копировать'}
+                        </button>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setExportMenuOpen({ type: 'transcription', id: rec.id });
+                            }}
+                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                        >
+                            <FileDown className="w-3 h-3" /> Экспорт
+                        </button>
+                      </div>
                   </div>
 
                   {/* Export Menu Popover for Transcription */}
@@ -476,27 +524,20 @@ const RecordingList: React.FC<RecordingListProps> = ({
   );
 
   return (
-    <div className="flex h-full w-full">
-      
-      {/* LEFT COLUMN: LIST */}
-      {/* On Mobile: Hidden if selectedId is set. On Desktop: Always visible, fixed width */}
-      <div className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 lg:w-96 flex-shrink-0 bg-dark md:bg-transparent h-full pb-20 md:pb-0`}>
-        <div className="p-4 md:p-6 sticky top-0 bg-dark z-10">
-           <h2 className="text-2xl font-bold text-white mb-4">Мои записи</h2>
-           <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-              <input 
-                type="text" 
-                placeholder="Поиск..." 
-                className="w-full bg-surface border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-primary placeholder-slate-600"
-              />
-           </div>
+    <div className="flex h-full overflow-hidden">
+      {/* List Sidebar */}
+      <div className={`${selectedId ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 flex-col border-r border-slate-800 bg-slate-900/50`}>
+        <div className="p-4 border-b border-slate-800 bg-surface/80 backdrop-blur-md sticky top-0 z-10">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <List className="w-5 h-5 text-primary" />
+            Записи
+          </h2>
         </div>
-
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 space-y-3 scrollbar-thin scrollbar-thumb-slate-700">
+        
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-slate-700">
           {recordings.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-              <Clock className="w-12 h-12 mb-4 opacity-20" />
+            <div className="flex flex-col items-center justify-center h-64 text-slate-500 gap-3">
+              <BrainCircuit className="w-12 h-12 opacity-20" />
               <p>Нет записей</p>
             </div>
           ) : (
@@ -504,57 +545,65 @@ const RecordingList: React.FC<RecordingListProps> = ({
               <div 
                 key={rec.id}
                 onClick={() => setSelectedId(rec.id)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer group relative
-                  ${selectedId === rec.id 
-                    ? 'bg-primary/10 border-primary shadow-md' 
-                    : 'bg-surface hover:bg-slate-700/50 border-slate-700'
-                  }`}
+                className={`p-3 rounded-xl cursor-pointer transition-all border group ${
+                  selectedId === rec.id 
+                    ? 'bg-primary/20 border-primary/50 shadow-lg' 
+                    : 'bg-surface border-slate-700 hover:border-slate-500 hover:bg-slate-800'
+                }`}
               >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    rec.status === 'analyzed' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'
-                  }`}>
-                    {rec.status === 'analyzed' ? <BrainCircuit className="w-4 h-4" /> : <Play className="w-3 h-3 ml-0.5" />}
-                  </div>
-                  <h3 className={`font-medium truncate text-sm flex-1 ${selectedId === rec.id ? 'text-primary' : 'text-white'}`}>
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className={`font-semibold text-sm truncate pr-2 ${selectedId === rec.id ? 'text-white' : 'text-slate-200'}`}>
                     {rec.title}
                   </h3>
+                  <button 
+                    onClick={(e) => handleDelete(e, rec.id)}
+                    className="text-slate-500 hover:text-red-400 p-1 hover:bg-slate-700 rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-
-                <div className="flex items-center justify-between text-xs text-slate-400 pl-11">
+                
+                <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {new Date(rec.date).toLocaleDateString()}
                   </span>
-                  <span>{Math.floor(rec.duration / 60)}:{(rec.duration % 60).toString().padStart(2, '0')}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {Math.floor(rec.duration / 60)}:{String(rec.duration % 60).padStart(2, '0')}
+                  </span>
                 </div>
 
-                <button 
-                  onClick={(e) => handleDelete(e, rec.id)}
-                  className="absolute top-3 right-3 p-1.5 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-2 mt-2">
+                  {rec.transcription && (
+                    <span className="bg-blue-900/40 text-blue-300 px-1.5 py-0.5 rounded text-[10px] border border-blue-800/50">STT</span>
+                  )}
+                  {rec.summary && (
+                    <span className="bg-purple-900/40 text-purple-300 px-1.5 py-0.5 rounded text-[10px] border border-purple-800/50">AI</span>
+                  )}
+                  {rec.status.startsWith('processing') && (
+                    <span className="bg-yellow-900/40 text-yellow-300 px-1.5 py-0.5 rounded text-[10px] border border-yellow-800/50 animate-pulse">...</span>
+                  )}
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
 
-      {/* RIGHT COLUMN: DETAIL VIEW */}
-      {/* On Mobile: Visible if selectedId is set. On Desktop: Visible always (placeholder or content) */}
-      <div className={`${selectedId ? 'flex' : 'hidden md:flex'} flex-1 h-full w-full overflow-hidden`}>
-          {selectedId && selectedRecording ? (
-             renderDetailView(selectedRecording, window.innerWidth < 768)
-          ) : (
-            <div className="hidden md:flex flex-col items-center justify-center w-full h-full text-slate-500 bg-slate-900/50 rounded-tl-2xl border-l border-slate-800">
-               <FileText className="w-16 h-16 mb-4 opacity-10" />
-               <p className="text-lg font-medium">Выберите запись для просмотра</p>
-               <p className="text-sm opacity-60">Транскрипция и AI анализ появятся здесь</p>
-            </div>
-          )}
+      {/* Main Detail View */}
+      <div className={`flex-1 ${selectedId ? 'flex' : 'hidden md:flex'} bg-dark relative`}>
+        {selectedRecording ? (
+          renderDetailView(selectedRecording)
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-4">
+             <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center border border-slate-700">
+                <Play className="w-8 h-8 opacity-50 ml-1" />
+             </div>
+             <p className="font-medium">Выберите запись для просмотра</p>
+          </div>
+        )}
       </div>
-
     </div>
   );
 };
