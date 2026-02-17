@@ -1,0 +1,7 @@
+{
+  "name": "Polza Voice Notes",
+  "description": "A smart voice recorder and AI assistant that records audio, transcribes it via Polza AI, and generates summaries and tasks.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
