@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, ChevronRight, X, Download, FileDown } from 'lucide-react';
+import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, ChevronRight, X, Download, FileDown, Search } from 'lucide-react';
 import { AudioRecording } from '../types';
 import { getAudioBlob, deleteAudioBlob } from '../services/db';
 import { transcribeAudio, analyzeText } from '../services/polza';
@@ -207,18 +207,19 @@ const RecordingList: React.FC<RecordingListProps> = ({
     }
   };
 
-  // Detail View Component
-  if (selectedId && selectedRecording) {
-    return (
-      <div className="h-full flex flex-col bg-dark pb-24 overflow-hidden relative">
+  // RENDER HELPERS
+  const renderDetailView = (rec: AudioRecording, isMobile: boolean) => (
+      <div className={`h-full flex flex-col bg-dark pb-24 md:pb-0 overflow-hidden relative ${isMobile ? '' : 'rounded-tl-2xl border-l border-slate-700'}`}>
         <div className="p-4 flex items-center gap-3 border-b border-slate-800 bg-surface/50 backdrop-blur-md sticky top-0 z-20">
-          <button onClick={() => setSelectedId(null)} className="p-2 hover:bg-slate-700 rounded-full">
-            <X className="w-5 h-5" />
-          </button>
-          <h2 className="text-lg font-semibold truncate flex-1">{selectedRecording.title}</h2>
+          {isMobile && (
+             <button onClick={() => setSelectedId(null)} className="p-2 hover:bg-slate-700 rounded-full">
+                <X className="w-5 h-5" />
+             </button>
+          )}
+          <h2 className="text-lg font-semibold truncate flex-1">{rec.title}</h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           {/* Audio Player */}
           {currentBlobUrl && (
             <div className="bg-surface p-4 rounded-xl shadow-lg border border-slate-700">
@@ -227,23 +228,23 @@ const RecordingList: React.FC<RecordingListProps> = ({
           )}
 
           {/* Action Button */}
-          {selectedRecording.status !== 'analyzed' && selectedRecording.status !== 'processing_stt' && selectedRecording.status !== 'processing_ai' && (
+          {rec.status !== 'analyzed' && rec.status !== 'processing_stt' && rec.status !== 'processing_ai' && (
              <button
              onClick={handleProcess}
              disabled={isLoading}
-             className="w-full bg-gradient-to-r from-primary to-secondary p-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2"
+             className="w-full bg-gradient-to-r from-primary to-secondary p-4 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
            >
              <BrainCircuit className="w-5 h-5" />
-             {isLoading ? 'Обработка...' : (selectedRecording.transcription ? 'Сгенерировать резюме' : 'Обработать с Polza AI')}
+             {isLoading ? 'Обработка...' : (rec.transcription ? 'Сгенерировать резюме' : 'Обработать с Polza AI')}
            </button>
           )}
 
           {/* Status Indicator during processing */}
-          {(selectedRecording.status === 'processing_stt' || selectedRecording.status === 'processing_ai') && (
+          {(rec.status === 'processing_stt' || rec.status === 'processing_ai') && (
             <div className="bg-blue-900/30 border border-blue-800 p-4 rounded-xl animate-pulse">
                <p className="text-blue-200 text-center flex flex-col gap-1">
                  <span className="font-semibold">
-                    {selectedRecording.status === 'processing_stt' ? `Транскрибация аудио (${selectedSttModel})...` : `Анализ текста (${selectedModel})...`}
+                    {rec.status === 'processing_stt' ? `Транскрибация аудио (${selectedSttModel})...` : `Анализ текста (${selectedModel})...`}
                  </span>
                  <span className="text-xs opacity-70">Это может занять некоторое время</span>
                </p>
@@ -251,164 +252,201 @@ const RecordingList: React.FC<RecordingListProps> = ({
           )}
 
           {/* Analysis Results */}
-          {selectedRecording.transcription && (
-            <div className="space-y-6">
+          {rec.transcription && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               
-              {/* Analysis Section */}
-              {selectedRecording.status === 'analyzed' && (
+              {/* Analysis Section (Full width on mobile, half on very wide desktop screens if needed, keeping stacked for now for better reading) */}
+              <div className="xl:col-span-2 space-y-6">
+                
+                {rec.status === 'analyzed' && (
+                  <div className="relative">
+                      <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-secondary font-semibold flex items-center gap-2">
+                              <BrainCircuit className="w-5 h-5" />
+                              AI Анализ
+                          </h3>
+                          <button 
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExportMenuOpen({ type: 'analysis', id: rec.id });
+                              }}
+                              className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                          >
+                              <Download className="w-3 h-3" /> Экспорт отчета
+                          </button>
+                      </div>
+
+                      {/* Export Menu Popover for Analysis */}
+                      {exportMenuOpen?.type === 'analysis' && (
+                          <div ref={exportMenuRef} className="absolute right-0 top-10 z-30 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden min-w-[150px]">
+                              <button onClick={() => handleExport('txt')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Text (.txt)</button>
+                              <button onClick={() => handleExport('rtf')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Rich Text (.rtf)</button>
+                              <button onClick={() => handleExport('doc')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">MS Word (.doc)</button>
+                          </div>
+                      )}
+
+                      {rec.summary && (
+                          <div className="bg-surface rounded-xl p-5 border border-slate-700 mb-4 shadow-sm">
+                          <p className="text-slate-200 leading-relaxed text-base">
+                              <span className="text-slate-500 block text-xs font-bold mb-2 uppercase tracking-wider">Резюме</span>
+                              {rec.summary}
+                          </p>
+                          </div>
+                      )}
+
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {rec.tasks && rec.tasks.length > 0 && (
+                            <div className="bg-surface rounded-xl p-5 border border-slate-700 shadow-sm h-full">
+                            <span className="text-green-500 block text-xs font-bold mb-3 uppercase tracking-wider">Задачи</span>
+                            <ul className="list-none space-y-3 text-slate-300 text-sm">
+                                {rec.tasks.map((task, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                  <div className="mt-1 min-w-[16px] h-4 border-2 border-slate-600 rounded flex-shrink-0"></div>
+                                  <span>{task}</span>
+                                </li>
+                                ))}
+                            </ul>
+                            </div>
+                        )}
+
+                        {rec.keyPoints && rec.keyPoints.length > 0 && (
+                            <div className="bg-surface rounded-xl p-5 border border-slate-700 shadow-sm h-full">
+                            <span className="text-amber-500 block text-xs font-bold mb-3 uppercase tracking-wider">Тезисы</span>
+                            <ul className="space-y-2">
+                                {rec.keyPoints.map((point, idx) => (
+                                <li key={idx} className="flex gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded border border-slate-800">
+                                    <span className="text-amber-400 font-bold min-w-[10px]">•</span>
+                                    <span>{point}</span>
+                                </li>
+                                ))}
+                            </ul>
+                            </div>
+                        )}
+                      </div>
+                  </div>
+                )}
+
+                {/* Transcription Section */}
                 <div className="relative">
-                    <div className="flex items-center justify-between mb-3">
-                         <h3 className="text-secondary font-semibold flex items-center gap-2">
-                            <BrainCircuit className="w-4 h-4" />
-                            AI Анализ
-                        </h3>
-                        <button 
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setExportMenuOpen({ type: 'analysis', id: selectedRecording.id });
-                            }}
-                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded"
-                        >
-                            <Download className="w-3 h-3" /> Экспорт
-                        </button>
+                  <div className="flex items-center justify-between mb-3 pt-4 border-t border-slate-800">
+                      <h3 className="text-slate-400 font-semibold flex items-center gap-2">
+                          <FileText className="w-5 h-5" />
+                          Транскрипция
+                      </h3>
+                      <button 
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              setExportMenuOpen({ type: 'transcription', id: rec.id });
+                          }}
+                          className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                      >
+                          <FileDown className="w-3 h-3" /> Экспорт текста
+                      </button>
+                  </div>
+
+                  {/* Export Menu Popover for Transcription */}
+                  {exportMenuOpen?.type === 'transcription' && (
+                          <div ref={exportMenuRef} className="absolute right-0 top-14 z-30 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden min-w-[150px]">
+                              <button onClick={() => handleExport('txt')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Text (.txt)</button>
+                              <button onClick={() => handleExport('rtf')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Rich Text (.rtf)</button>
+                              <button onClick={() => handleExport('doc')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">MS Word (.doc)</button>
+                          </div>
+                      )}
+
+                  <div className="bg-surface rounded-xl p-6 border border-slate-700 shadow-sm">
+                    <div className="text-slate-300 text-base leading-relaxed whitespace-pre-wrap font-sans">
+                      {rec.transcription}
                     </div>
-
-                    {/* Export Menu Popover for Analysis */}
-                    {exportMenuOpen?.type === 'analysis' && (
-                        <div ref={exportMenuRef} className="absolute right-0 top-8 z-30 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden min-w-[150px]">
-                            <button onClick={() => handleExport('txt')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Text (.txt)</button>
-                            <button onClick={() => handleExport('rtf')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Rich Text (.rtf)</button>
-                            <button onClick={() => handleExport('doc')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">MS Word (.doc)</button>
-                        </div>
-                    )}
-
-                    {selectedRecording.summary && (
-                        <div className="bg-surface rounded-xl p-5 border border-slate-700 mb-4">
-                        <p className="text-slate-300 leading-relaxed text-sm">
-                            <span className="text-slate-500 block text-xs font-bold mb-1 uppercase">Резюме</span>
-                            {selectedRecording.summary}
-                        </p>
-                        </div>
-                    )}
-
-                    {selectedRecording.tasks && selectedRecording.tasks.length > 0 && (
-                        <div className="bg-surface rounded-xl p-5 border border-slate-700 mb-4">
-                        <span className="text-green-500 block text-xs font-bold mb-2 uppercase">Задачи</span>
-                        <ul className="list-disc pl-5 space-y-2 text-slate-300 text-sm">
-                            {selectedRecording.tasks.map((task, idx) => (
-                            <li key={idx}>{task}</li>
-                            ))}
-                        </ul>
-                        </div>
-                    )}
-
-                    {selectedRecording.keyPoints && selectedRecording.keyPoints.length > 0 && (
-                        <div className="bg-surface rounded-xl p-5 border border-slate-700">
-                        <span className="text-amber-500 block text-xs font-bold mb-2 uppercase">Тезисы</span>
-                        <ul className="space-y-2">
-                            {selectedRecording.keyPoints.map((point, idx) => (
-                            <li key={idx} className="flex gap-2 text-sm text-slate-300 bg-slate-800/50 p-2 rounded">
-                                <span className="text-amber-400 font-bold min-w-[10px]">•</span>
-                                <span>{point}</span>
-                            </li>
-                            ))}
-                        </ul>
-                        </div>
-                    )}
-                </div>
-              )}
-
-              {/* Transcription Section */}
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-slate-400 font-semibold flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        Транскрипция
-                    </h3>
-                    <button 
-                         onClick={(e) => {
-                            e.stopPropagation();
-                            setExportMenuOpen({ type: 'transcription', id: selectedRecording.id });
-                        }}
-                        className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded"
-                    >
-                        <FileDown className="w-3 h-3" /> Экспорт
-                    </button>
-                </div>
-
-                 {/* Export Menu Popover for Transcription */}
-                 {exportMenuOpen?.type === 'transcription' && (
-                        <div ref={exportMenuRef} className="absolute right-0 top-8 z-30 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden min-w-[150px]">
-                            <button onClick={() => handleExport('txt')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Text (.txt)</button>
-                            <button onClick={() => handleExport('rtf')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Rich Text (.rtf)</button>
-                            <button onClick={() => handleExport('doc')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">MS Word (.doc)</button>
-                        </div>
-                    )}
-
-                <div className="bg-surface rounded-xl p-5 border border-slate-700">
-                  <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
-                    {selectedRecording.transcription}
                   </div>
                 </div>
-              </div>
 
+              </div>
             </div>
           )}
         </div>
       </div>
-    );
-  }
+  );
 
-  // List View Component
   return (
-    <div className="h-full flex flex-col p-4 pb-24 overflow-y-auto">
-      <h2 className="text-2xl font-bold mb-6 text-white sticky top-0 bg-dark z-10 py-2">Мои записи</h2>
-      {recordings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 text-slate-500 mt-20">
-          <Clock className="w-16 h-16 mb-4 opacity-20" />
-          <p>Нет записей</p>
+    <div className="flex h-full w-full">
+      
+      {/* LEFT COLUMN: LIST */}
+      {/* On Mobile: Hidden if selectedId is set. On Desktop: Always visible, fixed width */}
+      <div className={`${selectedId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 lg:w-96 flex-shrink-0 bg-dark md:bg-transparent h-full pb-20 md:pb-0`}>
+        <div className="p-4 md:p-6 sticky top-0 bg-dark z-10">
+           <h2 className="text-2xl font-bold text-white mb-4">Мои записи</h2>
+           <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
+              <input 
+                type="text" 
+                placeholder="Поиск..." 
+                className="w-full bg-surface border border-slate-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-primary placeholder-slate-600"
+              />
+           </div>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {recordings.map((rec) => (
-            <div 
-              key={rec.id}
-              onClick={() => setSelectedId(rec.id)}
-              className="bg-surface hover:bg-slate-700/50 transition-colors p-4 rounded-xl border border-slate-700 flex items-center gap-4 cursor-pointer group"
-            >
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                rec.status === 'analyzed' ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-slate-400'
-              }`}>
-                {rec.status === 'analyzed' ? <BrainCircuit className="w-5 h-5" /> : <Play className="w-4 h-4 ml-0.5" />}
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-white truncate">{rec.title}</h3>
-                <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 space-y-3 scrollbar-thin scrollbar-thumb-slate-700">
+          {recordings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+              <Clock className="w-12 h-12 mb-4 opacity-20" />
+              <p>Нет записей</p>
+            </div>
+          ) : (
+            recordings.map((rec) => (
+              <div 
+                key={rec.id}
+                onClick={() => setSelectedId(rec.id)}
+                className={`p-4 rounded-xl border transition-all cursor-pointer group relative
+                  ${selectedId === rec.id 
+                    ? 'bg-primary/10 border-primary shadow-md' 
+                    : 'bg-surface hover:bg-slate-700/50 border-slate-700'
+                  }`}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    rec.status === 'analyzed' ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {rec.status === 'analyzed' ? <BrainCircuit className="w-4 h-4" /> : <Play className="w-3 h-3 ml-0.5" />}
+                  </div>
+                  <h3 className={`font-medium truncate text-sm flex-1 ${selectedId === rec.id ? 'text-primary' : 'text-white'}`}>
+                    {rec.title}
+                  </h3>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 pl-11">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {new Date(rec.date).toLocaleDateString()}
                   </span>
                   <span>{Math.floor(rec.duration / 60)}:{(rec.duration % 60).toString().padStart(2, '0')}</span>
-                  {rec.status === 'analyzed' && (
-                    <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">AI Ready</span>
-                  )}
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                 <button 
+                <button 
                   onClick={(e) => handleDelete(e, rec.id)}
-                  className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                  className="absolute top-3 right-3 p-1.5 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <ChevronRight className="w-5 h-5 text-slate-600" />
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
-      )}
+      </div>
+
+      {/* RIGHT COLUMN: DETAIL VIEW */}
+      {/* On Mobile: Visible if selectedId is set. On Desktop: Visible always (placeholder or content) */}
+      <div className={`${selectedId ? 'flex' : 'hidden md:flex'} flex-1 h-full w-full overflow-hidden`}>
+          {selectedId && selectedRecording ? (
+             renderDetailView(selectedRecording, window.innerWidth < 768)
+          ) : (
+            <div className="hidden md:flex flex-col items-center justify-center w-full h-full text-slate-500 bg-slate-900/50 rounded-tl-2xl border-l border-slate-800">
+               <FileText className="w-16 h-16 mb-4 opacity-10" />
+               <p className="text-lg font-medium">Выберите запись для просмотра</p>
+               <p className="text-sm opacity-60">Транскрипция и AI анализ появятся здесь</p>
+            </div>
+          )}
+      </div>
+
     </div>
   );
 };

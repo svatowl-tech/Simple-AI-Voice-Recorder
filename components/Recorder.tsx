@@ -254,129 +254,131 @@ const Recorder: React.FC<RecorderProps> = ({ onRecordingComplete }) => {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 pb-24">
-      
-      {/* Mode Switcher */}
-      {!isRecording && !audioBlob && (
-          <div className="mb-8 flex bg-slate-800 p-1 rounded-lg">
-            <button
-              onClick={() => setMode('mic')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mode === 'mic' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Mic className="w-4 h-4" />
-              Микрофон
-            </button>
-            <button
-              onClick={() => setMode('conference')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                mode === 'conference' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <MonitorPlay className="w-4 h-4" />
-              Конференция
-            </button>
-          </div>
-      )}
-
-      {/* Info Box for Conference Mode */}
-      {!isRecording && !audioBlob && mode === 'conference' && (
-        <div className="mb-6 max-w-xs bg-indigo-900/30 border border-indigo-500/30 p-3 rounded-lg flex gap-3 text-left">
-           <Info className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
-           <p className="text-xs text-indigo-200">
-             Для записи вебинара или звонка выберите вкладку или окно и обязательно включите <b>"Share audio" (Поделиться аудио)</b> в системном окне.
-           </p>
-        </div>
-      )}
-
-      {/* Visualizer / Timer */}
-      <div className="mb-12 relative flex items-center justify-center">
-        {isRecording && (
-          <div className={`absolute w-64 h-64 rounded-full animate-ping ${mode === 'conference' ? 'bg-indigo-500/20' : 'bg-red-500/20'}`}></div>
-        )}
-        <div className="relative z-10 w-48 h-48 rounded-full bg-surface border-4 border-slate-700 flex flex-col items-center justify-center shadow-2xl">
-           <span className={`text-4xl font-mono font-bold ${isRecording ? (mode === 'conference' ? 'text-indigo-400' : 'text-red-500') : 'text-slate-200'}`}>
-             {formatTime(duration)}
-           </span>
-           <span className="text-xs text-slate-500 mt-2 uppercase tracking-widest flex items-center gap-1">
-             {isRecording 
-                ? (mode === 'conference' ? <><MonitorPlay className="w-3 h-3"/> Запись...</> : <><Mic className="w-3 h-3"/> Запись...</>) 
-                : 'Готов'
-             }
-           </span>
-        </div>
-      </div>
-
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileChange} 
-        accept="audio/*" 
-        className="hidden" 
-        style={{ display: 'none' }}
-      />
-
-      {/* Controls */}
-      <div className="w-full max-w-xs flex items-center justify-center gap-6">
-        {!audioBlob ? (
-          !isRecording ? (
-            <div className="flex flex-col items-center gap-6">
+    <div className="flex flex-col items-center justify-center h-full p-6 pb-24 md:pb-6 overflow-y-auto">
+      <div className="max-w-2xl w-full flex flex-col items-center">
+        
+        {/* Mode Switcher */}
+        {!isRecording && !audioBlob && (
+            <div className="mb-8 flex bg-slate-800 p-1 rounded-lg">
               <button
-                onClick={startRecording}
-                className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 ring-4 ${
-                    mode === 'conference' 
-                    ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20 ring-indigo-900/30' 
-                    : 'bg-red-500 hover:bg-red-600 shadow-red-900/20 ring-red-900/30'
+                onClick={() => setMode('mic')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === 'mic' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {mode === 'conference' ? <MonitorPlay className="w-10 h-10 text-white" /> : <Mic className="w-10 h-10 text-white" />}
+                <Mic className="w-4 h-4" />
+                Микрофон
               </button>
-              
-              <button 
-                onClick={handleImportClick}
-                className="flex items-center gap-2 text-slate-400 hover:text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium border border-transparent hover:border-slate-700"
+              <button
+                onClick={() => setMode('conference')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  mode === 'conference' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-slate-200'
+                }`}
               >
-                <Upload className="w-4 h-4" />
-                Загрузить файл
+                <MonitorPlay className="w-4 h-4" />
+                Конференция
               </button>
             </div>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="w-24 h-24 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 border-4 border-slate-500"
-            >
-              <Square className="w-10 h-10 text-white fill-current" />
-            </button>
-          )
-        ) : (
-          <>
-            <button
-              onClick={resetRecording}
-              className="flex flex-col items-center gap-2 text-slate-400 hover:text-white transition-colors"
-            >
-              <div className="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center border border-slate-600 hover:border-slate-400 transition-colors">
-                 <RotateCcw className="w-6 h-6" />
-              </div>
-              <span className="text-xs">Сброс</span>
-            </button>
+        )}
 
-            <button
-              onClick={saveRecording}
-              className="w-24 h-24 bg-green-600 hover:bg-green-500 rounded-full flex items-center justify-center shadow-xl shadow-green-900/20 transition-all hover:scale-105 active:scale-95 ring-4 ring-green-900/30"
-            >
-              <Save className="w-10 h-10 text-white" />
-            </button>
-          </>
+        {/* Info Box for Conference Mode */}
+        {!isRecording && !audioBlob && mode === 'conference' && (
+          <div className="mb-8 max-w-md bg-indigo-900/30 border border-indigo-500/30 p-4 rounded-xl flex gap-3 text-left">
+            <Info className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-indigo-200">
+              Для записи вебинара или звонка выберите вкладку или окно и обязательно включите <b>"Share audio" (Поделиться аудио)</b> в системном окне.
+            </p>
+          </div>
+        )}
+
+        {/* Visualizer / Timer */}
+        <div className="mb-12 relative flex items-center justify-center">
+          {isRecording && (
+            <div className={`absolute w-72 h-72 rounded-full animate-ping ${mode === 'conference' ? 'bg-indigo-500/20' : 'bg-red-500/20'}`}></div>
+          )}
+          <div className="relative z-10 w-56 h-56 rounded-full bg-surface border-4 border-slate-700 flex flex-col items-center justify-center shadow-2xl">
+            <span className={`text-5xl font-mono font-bold ${isRecording ? (mode === 'conference' ? 'text-indigo-400' : 'text-red-500') : 'text-slate-200'}`}>
+              {formatTime(duration)}
+            </span>
+            <span className="text-sm text-slate-500 mt-2 uppercase tracking-widest flex items-center gap-1">
+              {isRecording 
+                  ? (mode === 'conference' ? <><MonitorPlay className="w-4 h-4"/> Запись...</> : <><Mic className="w-4 h-4"/> Запись...</>) 
+                  : 'Готов'
+              }
+            </span>
+          </div>
+        </div>
+
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange} 
+          accept="audio/*" 
+          className="hidden" 
+          style={{ display: 'none' }}
+        />
+
+        {/* Controls */}
+        <div className="w-full max-w-sm flex items-center justify-center gap-8">
+          {!audioBlob ? (
+            !isRecording ? (
+              <div className="flex flex-col items-center gap-8">
+                <button
+                  onClick={startRecording}
+                  className={`w-28 h-28 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 ring-4 ${
+                      mode === 'conference' 
+                      ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-900/20 ring-indigo-900/30' 
+                      : 'bg-red-500 hover:bg-red-600 shadow-red-900/20 ring-red-900/30'
+                  }`}
+                >
+                  {mode === 'conference' ? <MonitorPlay className="w-12 h-12 text-white" /> : <Mic className="w-12 h-12 text-white" />}
+                </button>
+                
+                <button 
+                  onClick={handleImportClick}
+                  className="flex items-center gap-2 text-slate-400 hover:text-white px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-sm font-medium border border-transparent hover:border-slate-700"
+                >
+                  <Upload className="w-4 h-4" />
+                  Загрузить файл
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={stopRecording}
+                className="w-28 h-28 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-105 active:scale-95 border-4 border-slate-500"
+              >
+                <Square className="w-12 h-12 text-white fill-current" />
+              </button>
+            )
+          ) : (
+            <>
+              <button
+                onClick={resetRecording}
+                className="flex flex-col items-center gap-2 text-slate-400 hover:text-white transition-colors"
+              >
+                <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center border border-slate-600 hover:border-slate-400 transition-colors">
+                  <RotateCcw className="w-6 h-6" />
+                </div>
+                <span className="text-sm">Сброс</span>
+              </button>
+
+              <button
+                onClick={saveRecording}
+                className="w-28 h-28 bg-green-600 hover:bg-green-500 rounded-full flex items-center justify-center shadow-xl shadow-green-900/20 transition-all hover:scale-105 active:scale-95 ring-4 ring-green-900/30"
+              >
+                <Save className="w-12 h-12 text-white" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {audioBlob && (
+          <div className="mt-10 w-full max-w-md bg-surface p-5 rounded-xl border border-slate-700">
+            <audio controls src={URL.createObjectURL(audioBlob)} className="w-full h-10" />
+            <p className="text-center text-sm text-slate-400 mt-2">Прослушайте перед сохранением</p>
+          </div>
         )}
       </div>
-
-      {audioBlob && (
-        <div className="mt-8 w-full max-w-sm bg-surface p-4 rounded-lg border border-slate-700">
-           <audio controls src={URL.createObjectURL(audioBlob)} className="w-full h-8" />
-           <p className="text-center text-xs text-slate-400 mt-2">Прослушайте перед сохранением</p>
-        </div>
-      )}
     </div>
   );
 };
