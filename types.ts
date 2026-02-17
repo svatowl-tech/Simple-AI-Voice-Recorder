@@ -4,8 +4,9 @@ export interface AudioRecording {
   date: number; // Timestamp
   duration: number; // Seconds
   blob?: Blob; // Not stored in LocalStorage, retrieved from IndexedDB
-  status: 'recorded' | 'processing_stt' | 'transcribed' | 'processing_ai' | 'analyzed' | 'error';
+  status: 'recorded' | 'processing_stt' | 'transcribed' | 'processing_ai' | 'analyzed' | 'processing_improve' | 'error';
   transcription?: string;
+  improvedText?: string;
   summary?: string;
   tasks?: string[];
   keyPoints?: string[];

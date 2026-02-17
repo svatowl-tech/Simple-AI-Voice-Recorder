@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Search } from 'lucide-react';
+import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, X, Download, FileDown, Search, Sparkles, PenTool } from 'lucide-react';
 import { AudioRecording } from '../types';
 import { getAudioBlob, deleteAudioBlob } from '../services/db';
-import { transcribeAudio, analyzeText } from '../services/polza';
+import { transcribeAudio, analyzeText, improveTextWithPolza } from '../services/polza';
 
 interface RecordingListProps {
   recordings: AudioRecording[];
@@ -26,7 +26,7 @@ const RecordingList: React.FC<RecordingListProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   
   // Export Menu State
-  const [exportMenuOpen, setExportMenuOpen] = useState<{ type: 'transcription' | 'analysis', id: string } | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState<{ type: 'transcription' | 'analysis' | 'improved', id: string } | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedRecording = recordings.find(r => r.id === selectedId);
@@ -116,6 +116,36 @@ const RecordingList: React.FC<RecordingListProps> = ({
     }
   };
 
+  const handleImproveText = async () => {
+    if (!selectedRecording || !selectedRecording.transcription || !apiKey) {
+      alert("Для улучшения текста сначала нужна транскрипция и API ключ.");
+      return;
+    }
+
+    setIsLoading(true);
+    const prevStatus = selectedRecording.status;
+    
+    // Set status
+    updateRecording({ ...selectedRecording, status: 'processing_improve' });
+
+    try {
+      const improved = await improveTextWithPolza(apiKey, selectedRecording.transcription, selectedModel);
+      
+      updateRecording({
+        ...selectedRecording,
+        status: prevStatus, // Revert to analyzed/transcribed status
+        improvedText: improved
+      });
+
+    } catch (error) {
+      console.error(error);
+      alert("Ошибка улучшения текста: " + error);
+      updateRecording({ ...selectedRecording, status: prevStatus });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (confirm("Удалить эту запись?")) {
@@ -188,13 +218,25 @@ const RecordingList: React.FC<RecordingListProps> = ({
   const handleExport = (format: 'txt' | 'rtf' | 'doc') => {
     if (!selectedRecording || !exportMenuOpen) return;
 
-    const isAnalysis = exportMenuOpen.type === 'analysis';
-    const contentText = isAnalysis 
-        ? getAnalysisContent(selectedRecording) 
-        : (selectedRecording.transcription || "");
+    let contentText = "";
+    let suffix = "";
+
+    switch (exportMenuOpen.type) {
+      case 'analysis':
+        contentText = getAnalysisContent(selectedRecording);
+        suffix = '_analysis';
+        break;
+      case 'transcription':
+        contentText = selectedRecording.transcription || "";
+        suffix = '_transcript';
+        break;
+      case 'improved':
+        contentText = selectedRecording.improvedText || "";
+        suffix = '_improved';
+        break;
+    }
     
     const baseFilename = selectedRecording.title.replace(/[^a-zа-яё0-9]/gi, '_');
-    const suffix = isAnalysis ? '_analysis' : '_transcript';
     const filename = `${baseFilename}${suffix}.${format}`;
 
     if (format === 'txt') {
@@ -228,7 +270,7 @@ const RecordingList: React.FC<RecordingListProps> = ({
           )}
 
           {/* Action Button */}
-          {rec.status !== 'analyzed' && rec.status !== 'processing_stt' && rec.status !== 'processing_ai' && (
+          {rec.status !== 'analyzed' && rec.status !== 'processing_stt' && rec.status !== 'processing_ai' && rec.status !== 'processing_improve' && (
              <button
              onClick={handleProcess}
              disabled={isLoading}
@@ -240,13 +282,15 @@ const RecordingList: React.FC<RecordingListProps> = ({
           )}
 
           {/* Status Indicator during processing */}
-          {(rec.status === 'processing_stt' || rec.status === 'processing_ai') && (
+          {(rec.status === 'processing_stt' || rec.status === 'processing_ai' || rec.status === 'processing_improve') && (
             <div className="bg-blue-900/30 border border-blue-800 p-4 rounded-xl animate-pulse">
                <p className="text-blue-200 text-center flex flex-col gap-1">
                  <span className="font-semibold">
-                    {rec.status === 'processing_stt' ? `Транскрибация аудио (${selectedSttModel})...` : `Анализ текста (${selectedModel})...`}
+                    {rec.status === 'processing_stt' && `Транскрибация аудио (${selectedSttModel})...`}
+                    {rec.status === 'processing_ai' && `Анализ текста (${selectedModel})...`}
+                    {rec.status === 'processing_improve' && `Улучшение текста с ИИ... Это может занять время.`}
                  </span>
-                 <span className="text-xs opacity-70">Это может занять некоторое время</span>
+                 <span className="text-xs opacity-70">Пожалуйста, не закрывайте приложение</span>
                </p>
             </div>
           )}
@@ -255,7 +299,7 @@ const RecordingList: React.FC<RecordingListProps> = ({
           {rec.transcription && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               
-              {/* Analysis Section (Full width on mobile, half on very wide desktop screens if needed, keeping stacked for now for better reading) */}
+              {/* Analysis Section */}
               <div className="xl:col-span-2 space-y-6">
                 
                 {rec.status === 'analyzed' && (
@@ -326,13 +370,77 @@ const RecordingList: React.FC<RecordingListProps> = ({
                   </div>
                 )}
 
+                {/* Improved Text Section */}
+                {rec.improvedText && (
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-3 pt-4 border-t border-slate-800">
+                        <h3 className="text-purple-400 font-semibold flex items-center gap-2">
+                            <Sparkles className="w-5 h-5" />
+                            Улучшенный текст
+                        </h3>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setExportMenuOpen({ type: 'improved', id: rec.id });
+                            }}
+                            className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
+                        >
+                            <FileDown className="w-3 h-3" /> Экспорт
+                        </button>
+                    </div>
+
+                    {/* Export Menu for Improved Text */}
+                    {exportMenuOpen?.type === 'improved' && (
+                        <div ref={exportMenuRef} className="absolute right-0 top-14 z-30 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden min-w-[150px]">
+                            <button onClick={() => handleExport('txt')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Text (.txt)</button>
+                            <button onClick={() => handleExport('rtf')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">Rich Text (.rtf)</button>
+                            <button onClick={() => handleExport('doc')} className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white">MS Word (.doc)</button>
+                        </div>
+                    )}
+
+                    <div className="bg-purple-900/10 rounded-xl p-6 border border-purple-500/30 shadow-sm">
+                      <div className="text-slate-200 text-base leading-relaxed whitespace-pre-wrap font-serif">
+                        {rec.improvedText}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Transcription Section */}
                 <div className="relative">
                   <div className="flex items-center justify-between mb-3 pt-4 border-t border-slate-800">
-                      <h3 className="text-slate-400 font-semibold flex items-center gap-2">
-                          <FileText className="w-5 h-5" />
-                          Транскрипция
-                      </h3>
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-slate-400 font-semibold flex items-center gap-2">
+                            <FileText className="w-5 h-5" />
+                            Исходная транскрипция
+                        </h3>
+                        
+                        {/* Improve Button */}
+                        {!rec.improvedText && rec.status !== 'processing_improve' && (
+                            <button
+                              onClick={handleImproveText}
+                              disabled={isLoading}
+                              className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full hover:shadow-lg hover:shadow-purple-500/20 transition-all active:scale-95 disabled:opacity-50"
+                              title="Исправить ошибки и улучшить читаемость с помощью ИИ"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              Улучшить с ИИ
+                            </button>
+                        )}
+                        
+                        {rec.improvedText && (
+                            <button
+                              onClick={handleImproveText}
+                              disabled={isLoading}
+                              className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                              title="Перегенерировать улучшенный текст"
+                            >
+                              <PenTool className="w-3 h-3" />
+                              Пересоздать
+                            </button>
+                        )}
+
+                      </div>
                       <button 
                           onClick={(e) => {
                               e.stopPropagation();
@@ -340,7 +448,7 @@ const RecordingList: React.FC<RecordingListProps> = ({
                           }}
                           className="text-xs flex items-center gap-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-700"
                       >
-                          <FileDown className="w-3 h-3" /> Экспорт текста
+                          <FileDown className="w-3 h-3" /> Экспорт
                       </button>
                   </div>
 

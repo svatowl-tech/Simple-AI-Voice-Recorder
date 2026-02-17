@@ -14,6 +14,49 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+// Helper function to split text into chunks based on character limit (preserving sentences)
+const splitTextIntoChunks = (text: string, maxChunkSize: number = 8000): string[] => {
+  if (text.length <= maxChunkSize) return [text];
+
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  // Split by paragraphs first, then sentences if needed
+  const paragraphs = text.split('\n');
+
+  for (const paragraph of paragraphs) {
+    // If a single paragraph is huge, we might need to split it by sentences
+    if ((currentChunk.length + paragraph.length) > maxChunkSize) {
+       if (currentChunk.length > 0) {
+         chunks.push(currentChunk);
+         currentChunk = "";
+       }
+       
+       if (paragraph.length > maxChunkSize) {
+          // Hard split for extremely long paragraphs
+          const sentences = paragraph.match(/[^.!?]+[.!?]+[\])'"]*/g) || [paragraph];
+          for (const sentence of sentences) {
+             if ((currentChunk.length + sentence.length) > maxChunkSize) {
+                chunks.push(currentChunk);
+                currentChunk = "";
+             }
+             currentChunk += sentence + " ";
+          }
+       } else {
+         currentChunk = paragraph + "\n";
+       }
+    } else {
+      currentChunk += paragraph + "\n";
+    }
+  }
+
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+};
+
 export const transcribeAudio = async (
   apiKey: string,
   blob: Blob,
@@ -26,7 +69,7 @@ export const transcribeAudio = async (
   const payload = {
     model: model, 
     file: base64Audio,
-    language: "ru", // Defaulting to Russian as per request context, but can be auto
+    language: "ru", 
   };
 
   const response = await fetch(`${POLZA_BASE_URL}/audio/transcriptions`, {
@@ -79,8 +122,7 @@ export const analyzeText = async (
       { role: "system", content: systemPrompt },
       { role: "user", content: `Текст для анализа:\n${text}` },
     ],
-    temperature: 0.3, // Lower temperature for more deterministic/structured output
-    // max_tokens: 2000,
+    temperature: 0.3, 
   };
 
   const response = await fetch(endpoint, {
@@ -102,7 +144,6 @@ export const analyzeText = async (
   try {
     const content = data.choices?.[0]?.message?.content || "{}";
     
-    // Cleanup potential markdown wrappers if the model ignores the "no markdown" instruction
     const cleanContent = content
       .replace(/```json/g, '')
       .replace(/```/g, '')
@@ -110,7 +151,6 @@ export const analyzeText = async (
 
     const parsed = JSON.parse(cleanContent);
     
-    // Ensure structure matches expectation even if partial
     return {
       summary: parsed.summary || "Не удалось сгенерировать резюме.",
       tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
@@ -120,4 +160,62 @@ export const analyzeText = async (
     console.error("Failed to parse AI response", e, data);
     throw new Error("AI вернул некорректный формат данных. Попробуйте другую модель.");
   }
+};
+
+export const improveTextWithPolza = async (
+  apiKey: string,
+  text: string,
+  model: string
+): Promise<string> => {
+  if (!apiKey) throw new Error("API Key is missing");
+
+  const endpoint = `${POLZA_BASE_URL}/chat/completions`;
+  const chunks = splitTextIntoChunks(text, 6000); // 6000 chars ~ 1500 tokens is safe for prompt + output
+  let improvedFullText = "";
+
+  const systemPrompt = `
+    Ты - профессиональный литературный редактор. Твоя задача - превратить сырую транскрипцию речи (Speech-to-Text) в качественный, читаемый текст.
+    
+    Инструкции:
+    1. Исправь грамматические и пунктуационные ошибки.
+    2. Устрани обрывочные фразы, "эканья", слова-паразиты и повторы.
+    3. Восстанови смысл плохо распознанных фрагментов, исходя из контекста.
+    4. Удали случайные комментарии и шумы, которые явно не относятся к основной теме разговора.
+    5. Структурируй текст: разбей на абзацы, сделай его связным и логичным.
+    6. Не сокращай текст без необходимости, сохрани все важные детали и факты, но изложи их литературным языком.
+    
+    Отвечай ТОЛЬКО улучшенным текстом. Не добавляй вступлений вроде "Вот исправленный текст:".
+  `;
+
+  for (const chunk of chunks) {
+    const payload = {
+      model: model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Отредактируй этот фрагмент текста:\n${chunk}` },
+      ],
+      temperature: 0.4, 
+    };
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: { message: response.statusText } }));
+      throw new Error(`Error improving text: ${err.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const resultChunk = data.choices?.[0]?.message?.content || "";
+    
+    improvedFullText += resultChunk + "\n\n";
+  }
+
+  return improvedFullText.trim();
 };
