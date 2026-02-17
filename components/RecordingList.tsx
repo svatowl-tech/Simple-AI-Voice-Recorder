@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, FileText, BrainCircuit, Trash2, Calendar, Clock, ChevronRight, X, Download, FileDown } from 'lucide-react';
-import { AudioRecording, AIAnalysisResult } from '../types';
+import { AudioRecording } from '../types';
 import { getAudioBlob, deleteAudioBlob } from '../services/db';
 import { transcribeAudio, analyzeText } from '../services/polza';
-import ReactMarkdown from 'react-markdown';
 
 interface RecordingListProps {
   recordings: AudioRecording[];
@@ -74,22 +73,25 @@ const RecordingList: React.FC<RecordingListProps> = ({
       let transcriptionText = selectedRecording.transcription;
 
       if (!transcriptionText) {
-          const updatedRec = { ...selectedRecording, status: 'processing_stt' as const };
-          updateRecording(updatedRec);
+          const processingSttRec: AudioRecording = { ...selectedRecording, status: 'processing_stt' };
+          updateRecording(processingSttRec);
           
           const sttResult = await transcribeAudio(apiKey, blob, selectedSttModel);
           transcriptionText = sttResult.text;
           
-          updatedRec.transcription = transcriptionText;
-          updatedRec.status = 'transcribed';
-          updateRecording({ ...updatedRec });
+          const transcribedRec: AudioRecording = {
+            ...processingSttRec,
+            transcription: transcriptionText,
+            status: 'transcribed'
+          };
+          updateRecording(transcribedRec);
       }
 
       // 3. AI Analysis
-      const processingAiRec = { 
+      const processingAiRec: AudioRecording = { 
           ...selectedRecording, 
           transcription: transcriptionText,
-          status: 'processing_ai' as const 
+          status: 'processing_ai'
       };
       updateRecording(processingAiRec);
 
