@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, List, Settings as SettingsIcon, Radio, AudioWaveform } from 'lucide-react';
+import { Mic, List, Settings as SettingsIcon, AudioWaveform } from 'lucide-react';
 import Recorder from './components/Recorder';
 import RecordingList from './components/RecordingList';
 import Settings from './components/Settings';
